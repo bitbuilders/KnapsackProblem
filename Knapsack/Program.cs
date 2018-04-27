@@ -82,46 +82,61 @@ namespace Knapsack
             seenItems = new List<KnapsackItem>();
             ParseItemsFromFile(GetFilePathFromUser());
             PrintItems(knapsackItems);
-            PrintItems(KnapsackItem.SortBy(knapsackItems, SpecifiedParameter.VALUE));
             FindBestItems();
+            Console.WriteLine("Items I chose to put into knapsack:");
+            PrintItems(chosenItems);
+            Console.WriteLine($"Total Weight: {KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT)}");
+            Console.WriteLine($"Total Value: {KnapsackItem.Total(chosenItems, SpecifiedParameter.VALUE)}");
         }
 
         static void FindBestItems()
         {
-            for (int i = 0; i < knapsackItems.Count; ++i)
+            List<KnapsackItem> valuedItems = KnapsackItem.SortBy(knapsackItems, SpecifiedParameter.VALUE);
+            List<KnapsackItem> weightedItems = KnapsackItem.SortBy(knapsackItems, SpecifiedParameter.WEIGHT);
+            int currentWeight = KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT);
+            int currentValue = KnapsackItem.Total(chosenItems, SpecifiedParameter.VALUE);
+            int minimumValue = 0;
+            if (valuedItems.Count > 1)
             {
-                KnapsackItem item = knapsackItems[i];
-                if (KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT) + item.weight <= maxCapacity)
+                minimumValue += valuedItems[0].value;
+                minimumValue += valuedItems[1].value;
+            }
+            else if (valuedItems.Count > 0)
+            {
+                minimumValue += valuedItems[0].value;
+            }
+
+            for (int i = 0; i < weightedItems.Count; ++i)
+            {
+                KnapsackItem item = weightedItems[i];
+                seenItems.Add(item);
+                if (currentWeight + item.weight <= maxCapacity)
                 {
                     chosenItems.Add(item);
+                    currentWeight += item.weight;
+                    currentValue += item.value;
                 }
                 else
                 {
-                    seenItems.Add(item);
-                    for (int j = seenItems.Count - 1; j >= 0; --j)
-                    {
-
-                    }
-
+                    break;
                 }
             }
-        }
 
-        static void ShoveItemIntoSack(KnapsackItem itemToFit)
-        {
-            int currentWeight = KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT);
-            int currentValue = KnapsackItem.Total(chosenItems, SpecifiedParameter.VALUE);
-            int mostValue = currentValue;
-            int mostWeight = currentWeight;
-            List<KnapsackItem> itemsPossiblyRemoved = new List<KnapsackItem>();
-            for (int i = 0; i < seenItems.Count; ++i)
+            int chosenCount = chosenItems.Count;
+            List<KnapsackItem> lightestByValue = KnapsackItem.SortBy(chosenItems, SpecifiedParameter.VALUE);
+            int lightestValue = KnapsackItem.Total(lightestByValue, SpecifiedParameter.VALUE);
+            for (int i = weightedItems.Count - 1; i >= chosenCount; ++i)
             {
-                KnapsackItem currentItem = chosenItems[i];
-                if (mostWeight - currentItem.weight + itemToFit.weight <= maxCapacity &&
-                    mostValue - currentItem.value + itemToFit.value > mostValue)
+                KnapsackItem heaviestItem = weightedItems[i];
+                for (int j = 0; j < lightestByValue.Count; ++j)
                 {
-                    mostValue = currentValue - currentItem.value + itemToFit.value;
-                    mostWeight = mostWeight - currentItem.weight + itemToFit.weight;
+                    // Loop through lightest least valuable and keep removing them until you have enough room for heavy item
+                    // If at that point the addition of a heavy item would have an overall NET LOSS, don't do it, move on
+                    // If it is worth it to add the heavy item, then you will need to refresh the list and sort it again
+                    // Removed items should be added to a list that will be checked after the heavy items are checked
+                    // This way it will re-check the ones that were removed and there may be a large enough weight gap to slip it in
+                    // This process will repeat until nothing can be done
+                    // REMEMBER: Check and see if an item can be put in WITHOUT removing anything
                 }
             }
         }
