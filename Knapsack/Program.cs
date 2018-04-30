@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 namespace Knapsack
@@ -65,6 +66,7 @@ namespace Knapsack
 
     class Program
     {
+        static Stopwatch sw;
         static List<KnapsackItem> knapsackItems;
         static List<KnapsackItem> chosenItems;
         static List<KnapsackItem> seenItems;
@@ -77,28 +79,46 @@ namespace Knapsack
 
         static void RestartProgram()
         {
+            sw = new Stopwatch();
             knapsackItems = new List<KnapsackItem>();
             chosenItems = new List<KnapsackItem>();
             seenItems = new List<KnapsackItem>();
-            ParseItemsFromFile(GetFilePathFromUser());
+            LoadList();
             Console.WriteLine($"\nMaximum Bag Capacity: {maxCapacity}\n\nStarting Item Pool:");
             PrintItems(knapsackItems);
             FindBestItems();
             Console.WriteLine("Items I chose to put into knapsack:");
+            sw.Stop();
             PrintItems(chosenItems);
-            Console.WriteLine($"Total Weight: {KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT)} lbs.");
+            Console.WriteLine($"Total Weight: {KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT)} / {maxCapacity} lbs.");
             Console.WriteLine($"Total Value: ${KnapsackItem.Total(chosenItems, SpecifiedParameter.VALUE)}\n");
+            Console.WriteLine($"Took {sw.ElapsedMilliseconds / 1000} Seconds ({sw.ElapsedMilliseconds} millis)\n");
         }
 
         static void FindBestItems()
         {
             List<KnapsackItem> weightedItems = KnapsackItem.SortBy(knapsackItems, SpecifiedParameter.WEIGHT);
+
+            AddLightestItems(weightedItems);
+
+            // Loop through lightest least valuable and keep removing them until you have enough room for heavy item
+            // If at that point the addition of a heavy item would have an overall NET LOSS, don't do it, move on
+            // If it is worth it to add the heavy item, then you will need to refresh the list and sort it again
+            // Removed items should be added to a list that will be checked after the heavy items are checked
+            // This way it will re-check the ones that were removed and there may be a large enough weight gap to slip it in
+            // This process will repeat until nothing can be done
+            // REMEMBER: Check and see if an item can be put in WITHOUT removing anything
+
+            AddHeaviestItems(weightedItems);
+        }
+
+        static void AddLightestItems(List<KnapsackItem> weightedItems)
+        {
             int currentWeight = KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT);
 
             for (int i = 0; i < weightedItems.Count; ++i)
             {
                 KnapsackItem item = weightedItems[i];
-                seenItems.Add(item);
                 if (currentWeight + item.weight <= maxCapacity)
                 {
                     chosenItems.Add(item);
@@ -109,60 +129,67 @@ namespace Knapsack
                     break;
                 }
             }
+        }
 
-            // Loop through lightest least valuable and keep removing them until you have enough room for heavy item
-            // If at that point the addition of a heavy item would have an overall NET LOSS, don't do it, move on
-            // If it is worth it to add the heavy item, then you will need to refresh the list and sort it again
-            // Removed items should be added to a list that will be checked after the heavy items are checked
-            // This way it will re-check the ones that were removed and there may be a large enough weight gap to slip it in
-            // This process will repeat until nothing can be done
-            // REMEMBER: Check and see if an item can be put in WITHOUT removing anything
-
-            int chosenCount = chosenItems.Count;
+        static void AddHeaviestItems(List<KnapsackItem> weightedItems)
+        {
             List<KnapsackItem> lightestByValue = KnapsackItem.SortBy(chosenItems, SpecifiedParameter.VALUE);
             List<KnapsackItem> removedItems = new List<KnapsackItem>();
-            int startingValue = KnapsackItem.Total(lightestByValue, SpecifiedParameter.VALUE);
+            int startingValue = KnapsackItem.Total(chosenItems, SpecifiedParameter.VALUE);
             int startingWeight = KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT);
+            int chosenCount = chosenItems.Count;
             int weightLoss = 0;
             int valueLoss = 0;
             int lightIndex = 0;
-            for (int i = weightedItems.Count - 1; i >= chosenCount; --i)
+            for (int i = weightedItems.Count - 1; i >= 0; --i)
             {
                 KnapsackItem heaviestItem = weightedItems[i];
-                for (int j = lightIndex; j < lightestByValue.Count; ++j)
+                if (!chosenItems.Contains(heaviestItem))
                 {
-                    KnapsackItem lightestItem = lightestByValue[j];
-                    removedItems.Add(lightestItem);
-                    weightLoss += lightestItem.weight;
-                    valueLoss += lightestItem.value;
-                    if (startingWeight - weightLoss + heaviestItem.weight <= maxCapacity)
+                    for (int j = lightIndex; j < lightestByValue.Count; ++j)
                     {
-                        if (startingValue - valueLoss + heaviestItem.value > startingValue)
+                        KnapsackItem lightestItem = lightestByValue[j];
+                        removedItems.Add(lightestItem);
+                        weightLoss += lightestItem.weight;
+                        valueLoss += lightestItem.value;
+                        if (startingWeight - weightLoss + heaviestItem.weight <= maxCapacity)
                         {
-                            for (int x = 0; x < removedItems.Count; ++x)
+                            if (startingValue - valueLoss + heaviestItem.value > startingValue)
                             {
-                                if (startingWeight - weightLoss + heaviestItem.weight + removedItems[x].weight > maxCapacity)
+                                for (int x = 0; x < removedItems.Count; ++x)
                                 {
-                                    chosenItems.Remove(removedItems[x]);
+                                    if (startingWeight - weightLoss + heaviestItem.weight + removedItems[x].weight > maxCapacity)
+                                    {
+                                        chosenItems.Remove(removedItems[x]);
+                                        lightestByValue.Remove(removedItems[x]);
+                                    }
+                                    else
+                                    {
+                                        weightLoss -= removedItems[x].weight;
+                                    }
                                 }
-                                else
-                                {
-                                    weightLoss -= removedItems[x].weight;
-                                }
+                                //Console.WriteLine("Cerchunk!");
+                                chosenItems.Add(heaviestItem);
+                                startingValue = KnapsackItem.Total(chosenItems, SpecifiedParameter.VALUE);
+                                startingWeight = KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT);
                             }
-                            chosenItems.Add(heaviestItem);
-                            startingWeight -= weightLoss - heaviestItem.weight;
-                            startingValue -= valueLoss - heaviestItem.value;
-                            lightIndex = j + 1;
+                            weightLoss = 0;
+                            valueLoss = 0;
+                            removedItems.Clear();
+                            break;
                         }
-
-                        removedItems.Clear();
-                        weightLoss = 0;
-                        valueLoss = 0;
-                        break;
                     }
+                    weightLoss = 0;
+                    valueLoss = 0;
                 }
             }
+        }
+
+        static void LoadList()
+        {
+            ParseItemsFromFile(GetFilePathFromUser());
+            sw.Start();
+            //FillListRandom(knapsackItems, 1000000);
         }
 
         static string GetFilePathFromUser()
@@ -240,6 +267,19 @@ namespace Knapsack
             }
 
             return sb.ToString();
+        }
+
+        static void FillListRandom(List<KnapsackItem> items, int amount, int minimum = 50, int maximum = 200)
+        {
+            Random rand = new Random();
+            maxCapacity = (rand.Next() % (maximum - minimum + 1)) + minimum * (int)(amount * 0.000001f + 1.0f);
+            for (int i = 0; i < amount; ++i)
+            {
+                int weight = (rand.Next() % (maxCapacity / 2)) + 1;
+                int value = (int)(weight * (rand.NextDouble() * 10.0f + 1.0f));
+                KnapsackItem item = new KnapsackItem($"Item {i + 1}", weight, value);
+                items.Add(item);
+            }
         }
     }
 }
