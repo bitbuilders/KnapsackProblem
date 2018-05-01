@@ -85,7 +85,7 @@ namespace Knapsack
             seenItems = new List<KnapsackItem>();
             LoadList();
             Console.WriteLine($"\nMaximum Bag Capacity: {maxCapacity}\n\nStarting Item Pool:");
-            PrintItems(knapsackItems);
+            //PrintItems(knapsackItems);
             FindBestItems();
             Console.WriteLine("Items I chose to put into knapsack:");
             sw.Stop();
@@ -135,6 +135,7 @@ namespace Knapsack
         {
             List<KnapsackItem> lightestByValue = KnapsackItem.SortBy(chosenItems, SpecifiedParameter.VALUE);
             List<KnapsackItem> removedItems = new List<KnapsackItem>();
+            List<KnapsackItem> addedItems = new List<KnapsackItem>();
             int startingValue = KnapsackItem.Total(chosenItems, SpecifiedParameter.VALUE);
             int startingWeight = KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT);
             int chosenCount = chosenItems.Count;
@@ -172,6 +173,52 @@ namespace Knapsack
                                 chosenItems.Add(heaviestItem);
                                 startingValue = KnapsackItem.Total(chosenItems, SpecifiedParameter.VALUE);
                                 startingWeight = KnapsackItem.Total(chosenItems, SpecifiedParameter.WEIGHT);
+                            }
+                            else
+                            {
+                                addedItems.Add(heaviestItem);
+                                int valueAdded = heaviestItem.value;
+                                int weightAdded = heaviestItem.weight;
+                                for (int x = i - 1; x >= 0; --x)
+                                {
+                                    if (startingWeight - weightLoss + weightedItems[x].weight + heaviestItem.weight <= maxCapacity)
+                                    {
+                                        addedItems.Add(weightedItems[x]);
+                                        valueAdded += weightedItems[x].value;
+                                        weightAdded += weightedItems[x].weight;
+                                    }
+                                    else
+                                    {
+                                        valueAdded -= addedItems.ElementAt(addedItems.Count - 1).value;
+                                        weightAdded -= addedItems.ElementAt(addedItems.Count - 1).weight;
+                                        if (startingValue + valueAdded - valueLoss > startingValue)
+                                        {
+                                            for (int y = 0; y < removedItems.Count; ++y)
+                                            {
+                                                if (startingWeight - weightLoss + weightAdded + removedItems[y].weight > maxCapacity)
+                                                {
+                                                    chosenItems.Remove(removedItems[y]);
+                                                    lightestByValue.Remove(removedItems[y]);
+                                                }
+                                                else
+                                                {
+                                                    weightLoss -= removedItems[y].weight;
+                                                }
+                                            }
+                                            Console.WriteLine("Wow! more value!");
+                                        }
+                                        else
+                                        {
+                                            //Console.WriteLine("Not enough value!");
+                                            addedItems.Clear();
+                                        }
+                                        foreach (KnapsackItem item in addedItems)
+                                        {
+                                            chosenItems.Add(item);
+                                        }
+                                        break;
+                                    }
+                                }
                             }
                             weightLoss = 0;
                             valueLoss = 0;
